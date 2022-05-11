@@ -45,7 +45,7 @@ CATEGORIZE = {
 def categorize(rel):
     downloads = {}
 
-    tag_name = "wezterm-%s" % rel["tag_name"]
+    tag_name = f'wezterm-{rel["tag_name"]}'
     for asset in rel["assets"]:
         url = asset["browser_download_url"]
         name = asset["name"]

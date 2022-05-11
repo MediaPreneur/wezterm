@@ -17,7 +17,7 @@ def yv(v, depth=0):
             result = ""
             for l in v.splitlines():
                 result = result + "\n" + (f"{indent}{l}" if l else "")
-            return "|" + result
+            return f"|{result}"
         # This is hideous
         if '"' in v:
             return "'" + v + "'"
@@ -118,10 +118,7 @@ class Target(object):
         is_tag=False,
     ):
         if not name:
-            if container:
-                name = container
-            else:
-                name = os
+            name = container or os
         self.name = name.replace(":", "")
         self.os = os
         self.container = container
@@ -155,14 +152,10 @@ class Target(object):
         return False
 
     def uses_apk(self):
-        if "alpine" in self.name:
-            return True
-        return False
+        return "alpine" in self.name
 
     def needs_sudo(self):
-        if not self.container and self.uses_apt():
-            return True
-        return False
+        return bool(not self.container and self.uses_apt())
 
     def install_system_package(self, name):
         installer = None
@@ -202,18 +195,19 @@ class Target(object):
     def install_newer_compiler(self):
         steps = []
         if self.name == "centos7":
-            steps.append(
-                RunStep(
-                    "Install SCL",
-                    "yum install -y centos-release-scl-rh",
+            steps.extend(
+                (
+                    RunStep(
+                        "Install SCL",
+                        "yum install -y centos-release-scl-rh",
+                    ),
+                    RunStep(
+                        "Update compiler",
+                        "yum install -y devtoolset-9-gcc devtoolset-9-gcc-c++",
+                    ),
                 )
             )
-            steps.append(
-                RunStep(
-                    "Update compiler",
-                    "yum install -y devtoolset-9-gcc devtoolset-9-gcc-c++",
-                )
-            )
+
         return steps
 
     def install_git(self):
@@ -328,7 +322,8 @@ cargo build --all --release""",
             enable = ""
         return [
             RunStep(
-                name="Build (Release mode)", run=enable + "cargo build --all --release"
+                name="Build (Release mode)",
+                run=f"{enable}cargo build --all --release",
             )
         ]
 
@@ -346,7 +341,8 @@ cargo build --all --release""",
             enable = ""
         return [
             RunStep(
-                name="Test (Release mode)", run=enable + "cargo test --all --release"
+                name="Test (Release mode)",
+                run=f"{enable}cargo test --all --release",
             )
         ]
 
@@ -371,30 +367,20 @@ cargo build --all --release""",
         steps = []
 
         if self.uses_yum():
-            steps.append(
-                RunStep(
-                    "Move RPM",
-                    f"mv ~/rpmbuild/RPMS/*/*.rpm .",
-                )
-            )
+            steps.append(RunStep("Move RPM", "mv ~/rpmbuild/RPMS/*/*.rpm ."))
         elif self.uses_apk():
             steps += [
-                # Add the distro name/version into the filename
                 RunStep(
                     "Rename APKs",
                     f"mv ~/packages/wezterm/x86_64/*.apk $(echo ~/packages/wezterm/x86_64/*.apk | sed -e 's/wezterm-/wezterm-{self.name}')",
                 ),
-                # Move it to the repo dir
-                RunStep(
-                    "Move APKs",
-                    f"mv ~/packages/wezterm/x86_64/*.apk .",
-                ),
-                # Move and rename the keys
+                RunStep("Move APKs", "mv ~/packages/wezterm/x86_64/*.apk ."),
                 RunStep(
                     "Move APK keys",
                     f"mv ~/.abuild/*.pub wezterm-{self.name}.pub",
-                )
+                ),
             ]
+
 
         patterns = self.asset_patterns()
         glob = " ".join(patterns)
@@ -424,9 +410,7 @@ cargo build --all --release""",
                 patterns.append("*.pub")
 
         if self.app_image:
-            patterns.append("*src.tar.gz")
-            patterns.append("*.AppImage")
-            patterns.append("*.zsync")
+            patterns.extend(("*src.tar.gz", "*.AppImage", "*.zsync"))
         return patterns
 
     def upload_artifact_nightly(self):
@@ -625,11 +609,10 @@ cargo build --all --release""",
         steps += self.install_git()
         steps += self.install_curl()
 
-        if self.uses_apt():
-            if self.container:
-                steps += [
-                    RunStep("Update APT", f"{sudo}apt update"),
-                ]
+        if self.uses_apt() and self.container:
+            steps += [
+                RunStep("Update APT", f"{sudo}apt update"),
+            ]
 
         steps += self.install_openssh_server()
         steps += self.checkout()
@@ -749,11 +732,7 @@ def generate_actions(namer, jobber, trigger, is_continuous, is_tag=False):
         job, uploader = jobber(t)
 
         file_name = f".github/workflows/gen_{name}.yml"
-        if job.container:
-            container = f"container: {yv(job.container)}"
-        else:
-            container = ""
-
+        container = f"container: {yv(job.container)}" if job.container else ""
         with open(file_name, "w") as f:
             f.write(
                 f"""name: {name}

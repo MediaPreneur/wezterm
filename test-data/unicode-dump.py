@@ -318,15 +318,12 @@ UNICODE_BLOCKS = {
 
 def resolve_block_name(name):
     lname = name.lower()
-    candidates = []
-    for k in UNICODE_BLOCKS.keys():
-        if lname in k.lower():
-            candidates.append(k)
-    if len(candidates) == 0:
-        raise KeyError("{} is not a valid block name".format(name))
+    candidates = [k for k in UNICODE_BLOCKS.keys() if lname in k.lower()]
+    if not candidates:
+        raise KeyError(f"{name} is not a valid block name")
     if len(candidates) == 1:
         return candidates[0]
-    raise KeyError("{} could match {}".format(name, ", ".join(candidates)))
+    raise KeyError(f'{name} could match {", ".join(candidates)}')
 
 def print_range(start, end):
     print("0x{:x} -> 0x{:x}".format(start, end))
@@ -346,7 +343,7 @@ def do_show_range(args):
 
 def do_show_block(args):
     name = resolve_block_name(args.name)
-    print("Showing glyphs in `{}`".format(name))
+    print(f"Showing glyphs in `{name}`")
     (start, end) = UNICODE_BLOCKS[name]
     print_range(start, end)
 
